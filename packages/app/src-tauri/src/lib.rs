@@ -6,8 +6,8 @@ pub mod providers;
 mod watcher;
 
 use commands::{
-    get_providers, get_session_breakdown, get_session_detail, get_sync_status, get_usage_timeseries,
-    initial_sync, set_provider_enabled, sync_all, AppState,
+    get_providers, get_session_breakdown, get_session_detail, get_sync_settings, get_sync_status,
+    get_usage_timeseries, initial_sync, set_provider_enabled, set_sync_settings, sync_all, AppState,
 };
 use db::Database;
 use providers::all_provider_ids;
@@ -46,6 +46,8 @@ pub fn run() {
             get_providers,
             set_provider_enabled,
             get_sync_status,
+            get_sync_settings,
+            set_sync_settings,
             get_usage_timeseries,
             get_session_breakdown,
             get_session_detail,

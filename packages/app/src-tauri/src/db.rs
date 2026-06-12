@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{Local, Utc};
 use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 use serde::Serialize;
 use std::path::Path;
@@ -73,6 +73,20 @@ pub struct ProviderInfo {
 pub struct SyncStatus {
     pub last_sync: Option<i64>,
     pub providers: Vec<ProviderInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SyncSettings {
+    pub preset: String,
+    pub custom_since_ms: Option<i64>,
+    pub effective_since_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncWindowChange {
+    None,
+    Shrunk,
+    Expanded,
 }
 
 pub struct Database {
@@ -150,6 +164,24 @@ impl Database {
             );
             ",
         )?;
+        self.migrate_sync_settings()?;
+        Ok(())
+    }
+
+    fn migrate_sync_settings(&self) -> SqlResult<()> {
+        let has_preset: bool = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM pragma_table_info('sync_meta') WHERE name = 'sync_since_preset'")?
+            .query_row([], |row| row.get::<_, i64>(0))
+            .map(|n| n > 0)
+            .unwrap_or(false);
+
+        if !has_preset {
+            self.conn.execute_batch(
+                "ALTER TABLE sync_meta ADD COLUMN sync_since_preset TEXT NOT NULL DEFAULT '7d';
+                 ALTER TABLE sync_meta ADD COLUMN sync_since_custom_ms INTEGER;",
+            )?;
+        }
         Ok(())
     }
 
@@ -348,11 +380,112 @@ impl Database {
         Ok(())
     }
 
+    pub fn preset_duration_ms(preset: &str) -> Option<i64> {
+        match preset {
+            "1d" | "24h" => Some(24 * 3_600_000),
+            "7d" => Some(7 * 24 * 3_600_000),
+            "30d" => Some(30 * 24 * 3_600_000),
+            "180d" => Some(180 * 24 * 3_600_000),
+            "365d" => Some(365 * 24 * 3_600_000),
+            "all" | "custom" => None,
+            _ => Some(7 * 24 * 3_600_000),
+        }
+    }
+
+    pub fn effective_since_ms(preset: &str, custom_since_ms: Option<i64>) -> Option<i64> {
+        if preset == "all" {
+            return None;
+        }
+        if preset == "custom" {
+            return custom_since_ms;
+        }
+        let now = Local::now().timestamp_millis();
+        Self::preset_duration_ms(preset).map(|duration| now - duration)
+    }
+
+    pub fn get_sync_settings(&self) -> SqlResult<SyncSettings> {
+        let (preset, custom_since_ms): (String, Option<i64>) = self.conn.query_row(
+            "SELECT sync_since_preset, sync_since_custom_ms FROM sync_meta WHERE id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let effective_since_ms = Self::effective_since_ms(&preset, custom_since_ms);
+        Ok(SyncSettings {
+            preset,
+            custom_since_ms,
+            effective_since_ms,
+        })
+    }
+
+    pub fn set_sync_settings(
+        &self,
+        preset: &str,
+        custom_since_ms: Option<i64>,
+    ) -> SqlResult<SyncWindowChange> {
+        let old = self.get_sync_settings()?;
+        let new_effective = Self::effective_since_ms(preset, custom_since_ms);
+
+        let change = if old.preset == preset && old.custom_since_ms == custom_since_ms {
+            SyncWindowChange::None
+        } else {
+            Self::compare_sync_windows(old.effective_since_ms, new_effective)
+        };
+
+        self.conn.execute(
+            "UPDATE sync_meta SET sync_since_preset = ?1, sync_since_custom_ms = ?2 WHERE id = 1",
+            params![preset, custom_since_ms],
+        )?;
+        match change {
+            SyncWindowChange::Shrunk => {
+                if let Some(since) = new_effective {
+                    self.purge_events_before(since)?;
+                }
+            }
+            SyncWindowChange::Expanded => {
+                self.reset_cursors()?;
+            }
+            SyncWindowChange::None => {}
+        }
+        Ok(change)
+    }
+
+    fn compare_sync_windows(
+        old: Option<i64>,
+        new: Option<i64>,
+    ) -> SyncWindowChange {
+        match (old, new) {
+            (None, Some(_)) => SyncWindowChange::Shrunk,
+            (Some(_old_ms), None) => SyncWindowChange::Expanded,
+            (Some(old_ms), Some(new_ms)) if new_ms > old_ms => SyncWindowChange::Shrunk,
+            (Some(old_ms), Some(new_ms)) if new_ms < old_ms => SyncWindowChange::Expanded,
+            _ => SyncWindowChange::None,
+        }
+    }
+
+    pub fn purge_events_before(&self, since_ms: i64) -> SqlResult<()> {
+        self.conn.execute(
+            "DELETE FROM usage_events WHERE ts < ?1",
+            params![since_ms],
+        )?;
+        self.conn.execute(
+            "DELETE FROM sessions
+             WHERE id NOT IN (SELECT DISTINCT session_id FROM usage_events)",
+            [],
+        )?;
+        for source in self.enabled_source_ids()? {
+            self.recompute_session_aggregates(&source)?;
+        }
+        Ok(())
+    }
+
     pub fn range_start_ms(range: &str) -> i64 {
-        let now = Utc::now().timestamp_millis();
+        let now = Local::now().timestamp_millis();
         match range {
-            "24h" => now - 24 * 3_600_000,
+            "1d" | "24h" => now - 24 * 3_600_000,
             "30d" => now - 30 * 24 * 3_600_000,
+            "180d" => now - 180 * 24 * 3_600_000,
+            "365d" => now - 365 * 24 * 3_600_000,
+            "7d" => now - 7 * 24 * 3_600_000,
             _ => now - 7 * 24 * 3_600_000,
         }
     }

@@ -4,8 +4,11 @@ import type {
   ProviderInfo,
   SessionBreakdownItem,
   SessionDetailResponse,
+  SetSyncSettingsResponse,
   SyncAllResponse,
+  SyncSettings,
   SyncStatus,
+  SyncWindowPreset,
   TimeBucket,
   TimeseriesPoint,
   UsageRange,
@@ -26,6 +29,19 @@ export function setProviderEnabled(id: string, enabled: boolean): Promise<Provid
 
 export function getSyncStatus(): Promise<SyncStatus> {
   return invoke('get_sync_status')
+}
+
+export function getSyncSettings(): Promise<SyncSettings> {
+  return invoke('get_sync_settings')
+}
+
+export function setSyncSettings(
+  preset: SyncWindowPreset,
+  customSinceMs?: number | null,
+): Promise<SetSyncSettingsResponse> {
+  return invoke('set_sync_settings', {
+    args: { preset, custom_since_ms: customSinceMs ?? null },
+  })
 }
 
 export function getUsageTimeseries(

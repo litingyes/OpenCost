@@ -26,9 +26,14 @@ impl UsageProvider for ClaudePlugin {
             .collect()
     }
 
-    fn sync(&self, db: &Database, force: bool) -> Result<ProviderSyncReport, String> {
+    fn sync(
+        &self,
+        db: &Database,
+        force: bool,
+        since_ms: Option<i64>,
+    ) -> Result<ProviderSyncReport, String> {
         let roots = claude_roots();
-        let report = sync_claude_files(db, &roots, force)?;
+        let report = sync_claude_files(db, &roots, force, since_ms)?;
         db.recompute_session_aggregates(self.id())
             .map_err(|e| e.to_string())?;
         Ok(ProviderSyncReport {

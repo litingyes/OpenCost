@@ -1,12 +1,14 @@
-import { format } from 'date-fns'
-import { RefreshCw } from 'lucide-react'
+import { format, startOfDay } from 'date-fns'
+import { CalendarIcon, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { SessionBreakdownChart } from '@/components/charts/SessionBreakdownChart'
 import { UsageTimeSeriesChart } from '@/components/charts/UsageTimeSeriesChart'
 import { SessionDetailDrawer } from '@/components/SessionDetailDrawer'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -16,18 +18,34 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useProviders } from '@/features/usage/hooks/useProviders'
+import { useSyncSettings } from '@/features/usage/hooks/useSyncSettings'
 import { useUsage } from '@/features/usage/hooks/useUsage'
-import type { TimeBucket, UsageRange, UsageSource } from '@/features/usage/types'
+import { SYNC_WINDOW_PRESETS, syncWindowLabel } from '@/features/usage/syncWindow'
+import type { SyncWindowPreset, TimeBucket, UsageRange, UsageSource } from '@/features/usage/types'
 import { formatTokens } from '@/lib/format'
+
+const CHART_RANGE_OPTIONS: { value: UsageRange; label: string }[] = [
+  { value: '1d', label: '1d' },
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+  { value: '180d', label: '6mo' },
+  { value: '365d', label: '1y' },
+]
 
 export function Dashboard() {
   const [range, setRange] = useState<UsageRange>('7d')
-  const [bucket, setBucket] = useState<TimeBucket>(range === '24h' ? 'hour' : 'day')
+  const [bucket, setBucket] = useState<TimeBucket>('day')
   const [source, setSource] = useState<UsageSource>('all')
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [customCalendarOpen, setCustomCalendarOpen] = useState(false)
 
   const { providers, enabledProviders, toggle: toggleProvider } = useProviders()
+  const {
+    settings: syncSettings,
+    saving: savingSyncSettings,
+    update: updateSyncSettings,
+  } = useSyncSettings()
   const { timeseries, sessions, status, loading, syncing, error, sync } = useUsage(
     range,
     bucket,
@@ -44,13 +62,34 @@ export function Dashboard() {
 
   function handleRangeChange(value: UsageRange) {
     setRange(value)
-    setBucket(value === '24h' ? 'hour' : 'day')
+    setBucket(value === '1d' ? 'hour' : 'day')
+  }
+
+  async function handleSyncWindowChange(value: SyncWindowPreset) {
+    if (value === 'custom') {
+      setCustomCalendarOpen(true)
+      return
+    }
+    await updateSyncSettings(value)
+  }
+
+  async function handleCustomDateSelect(date: Date | undefined) {
+    if (!date) return
+    const sinceMs = startOfDay(date).getTime()
+    await updateSyncSettings('custom', sinceMs)
+    setCustomCalendarOpen(false)
   }
 
   function handleSessionSelect(sessionId: string) {
     setSelectedSessionId(sessionId)
     setDrawerOpen(true)
   }
+
+  const syncWindowSelectValue =
+    syncSettings?.preset === 'custom' ? 'custom' : (syncSettings?.preset ?? '7d')
+
+  const customSelectedDate =
+    syncSettings?.custom_since_ms != null ? new Date(syncSettings.custom_since_ms) : undefined
 
   return (
     <div className="min-h-screen bg-background">
@@ -75,16 +114,69 @@ export function Dashboard() {
               </SelectContent>
             </Select>
             <Select value={range} onValueChange={(v) => handleRangeChange(v as UsageRange)}>
-              <SelectTrigger className="w-[100px]" size="sm">
+              <SelectTrigger className="w-[88px]" size="sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="24h">24h</SelectItem>
-                <SelectItem value="7d">7d</SelectItem>
-                <SelectItem value="30d">30d</SelectItem>
+                {CHART_RANGE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={() => void sync(false)} disabled={syncing}>
+            <Popover open={customCalendarOpen} onOpenChange={setCustomCalendarOpen}>
+              <PopoverAnchor asChild>
+                <div>
+                  <Select
+                    value={syncWindowSelectValue}
+                    onValueChange={(v) => void handleSyncWindowChange(v as SyncWindowPreset)}
+                    disabled={savingSyncSettings || syncing}
+                  >
+                    <SelectTrigger className="w-[120px]" size="sm">
+                      <SelectValue>
+                        {syncSettings
+                          ? syncWindowLabel(syncSettings.preset, syncSettings.custom_since_ms)
+                          : 'History'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SYNC_WINDOW_PRESETS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </PopoverAnchor>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={customSelectedDate}
+                  onSelect={(date) => void handleCustomDateSelect(date)}
+                  disabled={(date) => date > new Date()}
+                />
+              </PopoverContent>
+            </Popover>
+            {syncSettings?.preset === 'custom' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="px-2"
+                onClick={() => setCustomCalendarOpen(true)}
+                disabled={savingSyncSettings || syncing}
+                aria-label="Change custom sync start date"
+              >
+                <CalendarIcon className="size-4" />
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void sync(false)}
+              disabled={syncing || savingSyncSettings}
+            >
               <RefreshCw className={syncing ? 'animate-spin' : ''} />
               Sync
             </Button>
@@ -115,11 +207,19 @@ export function Dashboard() {
           ))}
         </div>
 
-        {status?.last_sync && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Last sync {format(status.last_sync, 'MMM d HH:mm')}
-          </p>
-        )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          {status?.last_sync && <>Last sync {format(status.last_sync, 'MMM d HH:mm')}</>}
+          {syncSettings && (
+            <>
+              {status?.last_sync && ' · '}
+              {syncSettings.effective_since_ms != null ? (
+                <>History from {format(syncSettings.effective_since_ms, 'MMM d, yyyy')}</>
+              ) : (
+                'All history'
+              )}
+            </>
+          )}
+        </p>
         {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
       </header>
 

@@ -1,6 +1,6 @@
 use crate::db::{
-    Database, ProviderInfo, SessionBreakdownItem, SessionRow, SyncStatus, TimeseriesPoint,
-    UsageEventRow,
+    Database, ProviderInfo, SessionBreakdownItem, SessionRow, SyncSettings, SyncStatus,
+    SyncWindowChange, TimeseriesPoint, UsageEventRow,
 };
 use crate::providers::{all_providers, get_provider, restart_watcher, sync_enabled_providers};
 use crate::watcher::WatcherHandle;
@@ -41,6 +41,18 @@ pub struct SessionDetailArgs {
 pub struct SetProviderEnabledArgs {
     pub id: String,
     pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetSyncSettingsArgs {
+    pub preset: String,
+    pub custom_since_ms: Option<i64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct SetSyncSettingsResponse {
+    pub settings: SyncSettings,
+    pub needs_sync: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -118,6 +130,47 @@ pub fn set_provider_enabled(
     restart_watcher(&app);
     let _ = app.emit("providers:changed", ());
     Ok(infos)
+}
+
+#[tauri::command]
+pub fn get_sync_settings(state: State<AppState>) -> Result<SyncSettings, String> {
+    with_db(&state, |db| db.get_sync_settings().map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+pub fn set_sync_settings(
+    app: AppHandle,
+    state: State<AppState>,
+    args: SetSyncSettingsArgs,
+) -> Result<SetSyncSettingsResponse, String> {
+    let (settings, change) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let change = db
+            .set_sync_settings(&args.preset, args.custom_since_ms)
+            .map_err(|e| e.to_string())?;
+        let settings = db.get_sync_settings().map_err(|e| e.to_string())?;
+        (settings, change)
+    };
+
+    let needs_sync = change == SyncWindowChange::Expanded;
+    if needs_sync {
+        let app_clone = app.clone();
+        std::thread::spawn(move || {
+            if let Some(state) = app_clone.try_state::<AppState>() {
+                if let Ok(db) = state.db.lock() {
+                    let _ = sync_enabled_providers(&db, false);
+                    let _ = app_clone.emit("usage:updated", ());
+                }
+            }
+        });
+    } else if change == SyncWindowChange::Shrunk {
+        let _ = app.emit("usage:updated", ());
+    }
+
+    Ok(SetSyncSettingsResponse {
+        settings,
+        needs_sync,
+    })
 }
 
 #[tauri::command]

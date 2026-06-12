@@ -25,9 +25,14 @@ impl UsageProvider for CodexPlugin {
         vec![home.join("sessions"), home.join("archived_sessions")]
     }
 
-    fn sync(&self, db: &Database, force: bool) -> Result<ProviderSyncReport, String> {
+    fn sync(
+        &self,
+        db: &Database,
+        force: bool,
+        since_ms: Option<i64>,
+    ) -> Result<ProviderSyncReport, String> {
         let home = codex_home();
-        let report = sync_codex_files(db, &home, force)?;
+        let report = sync_codex_files(db, &home, force, since_ms)?;
         enrich_from_state_db(db, &home)?;
         db.recompute_session_aggregates(self.id())
             .map_err(|e| e.to_string())?;

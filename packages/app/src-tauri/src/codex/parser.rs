@@ -14,7 +14,12 @@ pub struct SyncReport {
     pub events_ingested: usize,
 }
 
-pub fn sync_codex_files(db: &Database, home: &Path, force: bool) -> Result<SyncReport, String> {
+pub fn sync_codex_files(
+    db: &Database,
+    home: &Path,
+    force: bool,
+    since_ms: Option<i64>,
+) -> Result<SyncReport, String> {
     if force {
         db.reset_cursors().map_err(|e| e.to_string())?;
     }
@@ -23,7 +28,8 @@ pub fn sync_codex_files(db: &Database, home: &Path, force: bool) -> Result<SyncR
     let mut events_ingested = 0usize;
 
     for path in &files {
-        let ingested = parse_rollout_file(db, path, force).map_err(|e| e.to_string())?;
+        let ingested =
+            parse_rollout_file(db, path, force, since_ms).map_err(|e| e.to_string())?;
         events_ingested += ingested;
     }
 
@@ -33,7 +39,12 @@ pub fn sync_codex_files(db: &Database, home: &Path, force: bool) -> Result<SyncR
     })
 }
 
-fn parse_rollout_file(db: &Database, path: &Path, force: bool) -> Result<usize, String> {
+fn parse_rollout_file(
+    db: &Database,
+    path: &Path,
+    force: bool,
+    since_ms: Option<i64>,
+) -> Result<usize, String> {
     let file_path = path.to_string_lossy().to_string();
     let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
     let mtime = metadata
@@ -84,6 +95,11 @@ fn parse_rollout_file(db: &Database, path: &Path, force: bool) -> Result<usize, 
         }
 
         if let Some(event) = parse_line(trimmed, &ctx) {
+            if let Some(since) = since_ms {
+                if event.ts < since {
+                    continue;
+                }
+            }
             if db.insert_usage_event(&event).map_err(|e| e.to_string())? {
                 ingested += 1;
             }

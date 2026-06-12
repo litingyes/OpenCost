@@ -1,6 +1,18 @@
-export type UsageRange = '24h' | '7d' | '30d'
+export type UsageRange = '1d' | '7d' | '30d' | '180d' | '365d'
+export type SyncWindowPreset = '1d' | '7d' | '30d' | '180d' | '365d' | 'all' | 'custom'
 export type TimeBucket = 'hour' | 'day'
 export type UsageSource = 'all' | string
+
+export interface SyncSettings {
+  preset: SyncWindowPreset
+  custom_since_ms: number | null
+  effective_since_ms: number | null
+}
+
+export interface SetSyncSettingsResponse {
+  settings: SyncSettings
+  needs_sync: boolean
+}
 
 export interface ProviderSyncReport {
   id: string

@@ -13,5 +13,10 @@ pub trait UsageProvider: Send + Sync {
     fn display_name(&self) -> &'static str;
     fn home_dir(&self) -> PathBuf;
     fn watch_paths(&self) -> Vec<PathBuf>;
-    fn sync(&self, db: &Database, force: bool) -> Result<ProviderSyncReport, String>;
+    fn sync(
+        &self,
+        db: &Database,
+        force: bool,
+        since_ms: Option<i64>,
+    ) -> Result<ProviderSyncReport, String>;
 }
