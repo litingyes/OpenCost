@@ -44,7 +44,7 @@ pnpm --filter app build
 
 ### Up next
 
-- [ ] Track usage for Claude Code / Codex
+- [x] Track usage for Codex (Claude Code next)
 - [ ] Analyze which dimensions token spend goes to
 - [ ] App Dashboard
 - [ ] App Bar
