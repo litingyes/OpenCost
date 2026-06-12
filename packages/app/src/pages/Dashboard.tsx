@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { useAutostart } from '@/features/app/hooks/useAutostart'
 import { useProviders } from '@/features/usage/hooks/useProviders'
 import { useSyncSettings } from '@/features/usage/hooks/useSyncSettings'
 import { useUsage } from '@/features/usage/hooks/useUsage'
@@ -41,6 +42,11 @@ export function Dashboard() {
   const [customCalendarOpen, setCustomCalendarOpen] = useState(false)
 
   const { providers, enabledProviders, toggle: toggleProvider } = useProviders()
+  const {
+    enabled: autostartEnabled,
+    loading: autostartLoading,
+    toggle: toggleAutostart,
+  } = useAutostart()
   const {
     settings: syncSettings,
     saving: savingSyncSettings,
@@ -188,6 +194,15 @@ export function Dashboard() {
         </div>
 
         <div className="mt-3 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Switch
+              checked={autostartEnabled}
+              onCheckedChange={(checked) => void toggleAutostart(checked)}
+              disabled={autostartLoading}
+              aria-label="Launch OpenCost at login"
+            />
+            <span className="min-w-[6rem] font-medium">Launch at login</span>
+          </div>
           {providers.map((provider) => (
             <div
               key={provider.id}

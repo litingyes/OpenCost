@@ -31,5 +31,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "cli": {
+      "description": "OpenCost desktop app",
+      "args": [
+        {
+          "name": "sync",
+          "description": "Run a full sync on launch"
+        }
+      ]
+    }
   }
 }

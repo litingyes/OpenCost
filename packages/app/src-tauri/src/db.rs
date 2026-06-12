@@ -197,11 +197,14 @@ impl Database {
     }
 
     pub fn is_provider_enabled(&self, id: &str) -> SqlResult<bool> {
-        let enabled: Option<i64> = self.conn.query_row(
-            "SELECT enabled FROM provider_settings WHERE id = ?1",
-            params![id],
-            |row| row.get(0),
-        ).optional()?;
+        let enabled: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT enabled FROM provider_settings WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .optional()?;
         Ok(enabled.unwrap_or(1) != 0)
     }
 
@@ -238,9 +241,11 @@ impl Database {
     }
 
     pub fn get_last_sync(&self) -> SqlResult<Option<i64>> {
-        self.conn.query_row("SELECT last_sync_at FROM sync_meta WHERE id = 1", [], |row| {
-            row.get(0)
-        })
+        self.conn.query_row(
+            "SELECT last_sync_at FROM sync_meta WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
     }
 
     pub fn get_cursor(&self, file_path: &str) -> SqlResult<Option<(i64, i64)>> {
@@ -449,10 +454,7 @@ impl Database {
         Ok(change)
     }
 
-    fn compare_sync_windows(
-        old: Option<i64>,
-        new: Option<i64>,
-    ) -> SyncWindowChange {
+    fn compare_sync_windows(old: Option<i64>, new: Option<i64>) -> SyncWindowChange {
         match (old, new) {
             (None, Some(_)) => SyncWindowChange::Shrunk,
             (Some(_old_ms), None) => SyncWindowChange::Expanded,
@@ -463,10 +465,8 @@ impl Database {
     }
 
     pub fn purge_events_before(&self, since_ms: i64) -> SqlResult<()> {
-        self.conn.execute(
-            "DELETE FROM usage_events WHERE ts < ?1",
-            params![since_ms],
-        )?;
+        self.conn
+            .execute("DELETE FROM usage_events WHERE ts < ?1", params![since_ms])?;
         self.conn.execute(
             "DELETE FROM sessions
              WHERE id NOT IN (SELECT DISTINCT session_id FROM usage_events)",

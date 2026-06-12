@@ -35,7 +35,8 @@ fn claude_fixture_sync() {
     assert_eq!(report.files_scanned, 1);
     assert_eq!(report.events_ingested, 1);
 
-    db.recompute_session_aggregates("claude").expect("aggregate");
+    db.recompute_session_aggregates("claude")
+        .expect("aggregate");
     let (sessions, tokens) = db.provider_stats("claude").expect("stats");
     assert_eq!(sessions, 1);
     assert_eq!(tokens, 135);
@@ -116,8 +117,7 @@ fn sync_settings_expand_resets_cursors() {
     db.set_sync_settings("1d", None).expect("set 1d");
     db.set_cursor("/tmp/example.jsonl", 100, 1).expect("cursor");
 
-    db.set_sync_settings("all", None)
-        .expect("expand to all");
+    db.set_sync_settings("all", None).expect("expand to all");
     let cursor = db.get_cursor("/tmp/example.jsonl").expect("cursor");
     assert!(cursor.is_none());
 

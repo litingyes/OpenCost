@@ -15,7 +15,10 @@ use crate::db::Database;
 use crate::watcher;
 use tauri::AppHandle;
 
-pub fn sync_enabled_providers(db: &Database, force: bool) -> Result<Vec<ProviderSyncReport>, String> {
+pub fn sync_enabled_providers(
+    db: &Database,
+    force: bool,
+) -> Result<Vec<ProviderSyncReport>, String> {
     if force {
         db.reset_cursors().map_err(|e| e.to_string())?;
     }

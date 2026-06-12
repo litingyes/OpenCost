@@ -28,8 +28,7 @@ pub fn sync_codex_files(
     let mut events_ingested = 0usize;
 
     for path in &files {
-        let ingested =
-            parse_rollout_file(db, path, force, since_ms).map_err(|e| e.to_string())?;
+        let ingested = parse_rollout_file(db, path, force, since_ms).map_err(|e| e.to_string())?;
         events_ingested += ingested;
     }
 
@@ -281,7 +280,9 @@ fn parse_line(line: &str, ctx: &ParseContext) -> Option<UsageEventRow> {
             return None;
         }
         let info = payload.get("info")?;
-        let usage = info.get("last_token_usage").or_else(|| info.get("total_token_usage"))?;
+        let usage = info
+            .get("last_token_usage")
+            .or_else(|| info.get("total_token_usage"))?;
         return Some(build_event(session_id, ctx, ts, usage));
     }
 
@@ -296,12 +297,18 @@ fn parse_line(line: &str, ctx: &ParseContext) -> Option<UsageEventRow> {
 }
 
 fn build_event(session_id: String, ctx: &ParseContext, ts: i64, usage: &Value) -> UsageEventRow {
-    let input = usage.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+    let input = usage
+        .get("input_tokens")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     let cached = usage
         .get("cached_input_tokens")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
-    let output = usage.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+    let output = usage
+        .get("output_tokens")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     let reasoning = usage
         .get("reasoning_output_tokens")
         .or_else(|| usage.get("reasoning_tokens"))

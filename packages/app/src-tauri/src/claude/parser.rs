@@ -24,8 +24,7 @@ pub fn sync_claude_files(
     let mut events_ingested = 0usize;
 
     for path in &files {
-        let ingested =
-            parse_jsonl_file(db, path, force, since_ms).map_err(|e| e.to_string())?;
+        let ingested = parse_jsonl_file(db, path, force, since_ms).map_err(|e| e.to_string())?;
         events_ingested += ingested;
     }
 
@@ -232,10 +231,7 @@ fn parse_line(line: &str, ctx: &ParseContext) -> Option<UsageEventRow> {
         .and_then(parse_timestamp)
         .unwrap_or_else(|| Utc::now().timestamp_millis());
 
-    let uuid = v
-        .get("uuid")
-        .and_then(|u| u.as_str())
-        .unwrap_or("unknown");
+    let uuid = v.get("uuid").and_then(|u| u.as_str()).unwrap_or("unknown");
 
     let cache_read = usage
         .get("cache_read_input_tokens")
@@ -245,8 +241,15 @@ fn parse_line(line: &str, ctx: &ParseContext) -> Option<UsageEventRow> {
         .get("cache_creation_input_tokens")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
-    let input = usage.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0) + cache_create;
-    let output = usage.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+    let input = usage
+        .get("input_tokens")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
+        + cache_create;
+    let output = usage
+        .get("output_tokens")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     let total = input + cache_read + output;
 
     let model = message

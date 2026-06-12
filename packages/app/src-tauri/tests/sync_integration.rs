@@ -17,7 +17,10 @@ fn sync_local_codex_rollouts() {
         .expect("seed");
 
     let reports = sync_enabled_providers(&db, true).expect("sync");
-    let codex = reports.iter().find(|r| r.id == "codex").expect("codex report");
+    let codex = reports
+        .iter()
+        .find(|r| r.id == "codex")
+        .expect("codex report");
     assert!(codex.files_scanned > 0, "expected rollout files");
 
     let (sessions, tokens) = db.provider_stats("codex").expect("stats");

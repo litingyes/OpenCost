@@ -8,11 +8,8 @@ pub fn enrich_from_state_db(db: &Database, codex_home: &Path) -> Result<(), Stri
         return Ok(());
     }
 
-    let conn = Connection::open_with_flags(
-        &state_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )
-    .map_err(|e| e.to_string())?;
+    let conn = Connection::open_with_flags(&state_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| e.to_string())?;
 
     let mut stmt = conn
         .prepare(
@@ -36,8 +33,7 @@ pub fn enrich_from_state_db(db: &Database, codex_home: &Path) -> Result<(), Stri
         .map_err(|e| e.to_string())?;
 
     for row in rows {
-        let (id, title, cwd, model, _rollout, first_msg, git) =
-            row.map_err(|e| e.to_string())?;
+        let (id, title, cwd, model, _rollout, first_msg, git) = row.map_err(|e| e.to_string())?;
         db.enrich_session_from_threads(
             &id,
             title.as_deref(),

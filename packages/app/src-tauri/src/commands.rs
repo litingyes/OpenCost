@@ -96,7 +96,10 @@ fn build_provider_infos(db: &Database) -> Result<Vec<ProviderInfo>, String> {
 }
 
 #[tauri::command]
-pub fn sync_all(state: State<AppState>, args: Option<SyncAllArgs>) -> Result<SyncAllResponse, String> {
+pub fn sync_all(
+    state: State<AppState>,
+    args: Option<SyncAllArgs>,
+) -> Result<SyncAllResponse, String> {
     let force = args.and_then(|a| a.force).unwrap_or(false);
     let reports = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
@@ -134,7 +137,9 @@ pub fn set_provider_enabled(
 
 #[tauri::command]
 pub fn get_sync_settings(state: State<AppState>) -> Result<SyncSettings, String> {
-    with_db(&state, |db| db.get_sync_settings().map_err(|e| e.to_string()))
+    with_db(&state, |db| {
+        db.get_sync_settings().map_err(|e| e.to_string())
+    })
 }
 
 #[tauri::command]
@@ -234,12 +239,12 @@ pub fn get_session_detail(
     })
 }
 
-pub fn initial_sync(app: AppHandle) {
+pub fn initial_sync(app: AppHandle, force: bool) {
     if let Some(state) = app.try_state::<AppState>() {
         if let Ok(db) = state.db.lock() {
             let ids: Vec<&str> = all_providers().iter().map(|p| p.id()).collect();
             let _ = db.seed_provider_settings(&ids);
-            let _ = sync_enabled_providers(&db, false);
+            let _ = sync_enabled_providers(&db, force);
         }
     }
 
